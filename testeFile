@@ -1,0 +1,79 @@
+From 06d1113befa1c2f73c870cd76fa4ad92b85c12bf Mon Sep 17 00:00:00 2001
+From: David Cermak <cermak@espressif.com>
+Date: Wed, 7 Oct 2020 15:09:41 +0200
+Subject: [PATCH] examples, esp_mesh: Fix internal ip mesh example to use
+ transmit wrap function
+
+Fixed regression caused by recent refactoring of WiFi Tx. If  wasn't defined all transmits end up in a crash.
+
+Closes https://github.com/espressif/esp-idf/issues/6067
+---
+ .../mesh/ip_internal_network/main/mesh_netif.c   | 16 +++++++++++++---
+ .../mesh/ip_internal_network/sdkconfig.defaults  |  5 +++++
+ 2 files changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/examples/mesh/ip_internal_network/main/mesh_netif.c b/examples/mesh/ip_internal_network/main/mesh_netif.c
+index d2efd7e565..d94a8924be 100644
+--- a/examples/mesh/ip_internal_network/main/mesh_netif.c
++++ b/examples/mesh/ip_internal_network/main/mesh_netif.c
+@@ -167,9 +167,10 @@ static esp_err_t mesh_netif_transmit_from_root_ap(void *h, void *buffer, size_t
+     }
+     return ESP_OK;
+ }
+-
+-// Construct and Destruct functions
+-//
++static esp_err_t mesh_netif_transmit_from_root_ap_wrap(void *h, void *buffer, size_t len, void *netstack_buf)
++{
++    return mesh_netif_transmit_from_root_ap(h, buffer, len);
++}
+ 
+ static esp_err_t mesh_netif_transmit_from_node_sta(void *h, void *buffer, size_t len)
+ {
+@@ -186,6 +187,13 @@ static esp_err_t mesh_netif_transmit_from_node_sta(void *h, void *buffer, size_t
+     return err;
+ }
+ 
++static esp_err_t mesh_netif_transmit_from_node_sta_wrap(void *h, void *buffer, size_t len, void *netstack_buf)
++{
++    return mesh_netif_transmit_from_node_sta(h, buffer, len);
++}
++
++// Construct and Destruct functions
++//
+ static esp_err_t mesh_driver_start_root_ap(esp_netif_t * esp_netif, void * args)
+ {
+     mesh_netif_driver_t driver = args;
+@@ -193,6 +201,7 @@ static esp_err_t mesh_driver_start_root_ap(esp_netif_t * esp_netif, void * args)
+     esp_netif_driver_ifconfig_t driver_ifconfig = {
+             .handle =  driver,
+             .transmit = mesh_netif_transmit_from_root_ap,
++            .transmit_wrap = mesh_netif_transmit_from_root_ap_wrap,
+             .driver_free_rx_buffer = mesh_free
+     };
+ 
+@@ -206,6 +215,7 @@ static esp_err_t mesh_driver_start_node_sta(esp_netif_t * esp_netif, void * args
+     esp_netif_driver_ifconfig_t driver_ifconfig = {
+             .handle =  driver,
+             .transmit = mesh_netif_transmit_from_node_sta,
++            .transmit_wrap = mesh_netif_transmit_from_node_sta_wrap,
+             .driver_free_rx_buffer = mesh_free
+     };
+ 
+diff --git a/examples/mesh/ip_internal_network/sdkconfig.defaults b/examples/mesh/ip_internal_network/sdkconfig.defaults
+index 27b8cb3cca..c8013ad015 100644
+--- a/examples/mesh/ip_internal_network/sdkconfig.defaults
++++ b/examples/mesh/ip_internal_network/sdkconfig.defaults
+@@ -4,4 +4,9 @@ CONFIG_LWIP_IP_FORWARD=y
+ CONFIG_LWIP_IPV4_NAPT=y
+ CONFIG_LWIP_TCP_MSS=624
+ CONFIG_LWIP_TCP_OVERSIZE_MSS=y
++CONFIG_PARTITION_TABLE_CUSTOM=y
++CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
++CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
++CONFIG_PARTITION_TABLE_OFFSET=0x8000
++CONFIG_PARTITION_TABLE_MD5=y
+ 
+-- 
+2.17.1
+
